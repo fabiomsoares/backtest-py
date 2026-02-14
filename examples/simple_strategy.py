@@ -41,9 +41,8 @@ class SimpleMovingAverageStrategy(Strategy):
         elif short_ma < long_ma and self.has_position(bar.symbol):
             # Sell signal
             position = self.get_position(bar.symbol)
-            if position:
-                self.sell(bar.symbol, quantity=position.quantity)
-                print(f"{bar.timestamp}: SELL at ${bar.close:.2f}")
+            self.sell(bar.symbol, quantity=position.quantity)
+            print(f"{bar.timestamp}: SELL at ${bar.close:.2f}")
 
 
 def generate_sample_data(symbol: str, days: int = 100) -> list:
