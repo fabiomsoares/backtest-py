@@ -77,16 +77,17 @@ class MyStrategy(Strategy):
         pass
 
 # Load historical data
-market_data = MarketDataRepository()
-market_data.load_data('path/to/data.csv')
+bars = []  # Load your historical market data here
+market_data_repo = MarketDataRepository()
+market_data_repo.add_bars(bars)
 
 # Run the backtest
 strategy = MyStrategy()
-results = engine.run(strategy, market_data)
+results = engine.run(strategy, bars)
 
 # Analyze results
 print(f"Total Return: {results.total_return:.2%}")
-print(f"Sharpe Ratio: {results.sharpe_ratio:.2f}")
+print(f"ROI: {results.roi:.2f}%")
 ```
 
 ## Usage
@@ -107,14 +108,18 @@ class MovingAverageCrossover(Strategy):
     
     def on_bar(self, bar):
         # Calculate moving averages
-        short_ma = self.get_moving_average(self.short_window)
-        long_ma = self.get_moving_average(self.long_window)
+        if len(self.bars) < self.long_window:
+            return
+        
+        recent_bars = self.bars[-self.long_window:]
+        short_ma = sum(b.close for b in recent_bars[-self.short_window:]) / self.short_window
+        long_ma = sum(b.close for b in recent_bars) / self.long_window
         
         # Generate signals
-        if short_ma > long_ma and not self.has_position():
-            self.buy(bar.close, quantity=100)
-        elif short_ma < long_ma and self.has_position():
-            self.sell(bar.close, quantity=100)
+        if short_ma > long_ma and not self.has_position(bar.symbol):
+            self.buy(bar.symbol, quantity=100)
+        elif short_ma < long_ma and self.has_position(bar.symbol):
+            self.sell(bar.symbol, quantity=100)
 ```
 
 ### Loading Market Data
@@ -123,23 +128,25 @@ The framework supports loading historical market data into the in-memory databas
 
 ```python
 from backtest.repositories.market_data_repository import MarketDataRepository
+from backtest.models.market_data import MarketBar
+from datetime import datetime
 
 # Initialize repository
 repo = MarketDataRepository()
 
-# Load data from CSV
-repo.load_from_csv('historical_data.csv')
-
-# Or add data programmatically
-from backtest.models.market_data import MarketBar
-repo.add_bar(MarketBar(
-    timestamp='2023-01-01 09:30:00',
-    open=100.0,
-    high=102.0,
-    low=99.5,
-    close=101.5,
-    volume=1000000
-))
+# Add data programmatically
+bars = [
+    MarketBar(
+        timestamp=datetime(2023, 1, 1, 9, 30, 0),
+        symbol='AAPL',
+        open=100.0,
+        high=102.0,
+        low=99.5,
+        close=101.5,
+        volume=1000000
+    )
+]
+repo.add_bars(bars)
 ```
 
 ## Architecture
