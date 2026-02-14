@@ -75,9 +75,15 @@ class Order:
             raise ValueError("Fill quantity exceeds remaining quantity")
         
         # Update filled quantity and average price
-        total_value = (self.filled_quantity * (self.filled_price or 0)) + (quantity * price)
+        if self.filled_quantity == 0:
+            # First fill
+            self.filled_price = price
+        else:
+            # Calculate weighted average price
+            total_value = (self.filled_quantity * self.filled_price) + (quantity * price)
+            self.filled_price = total_value / (self.filled_quantity + quantity)
+        
         self.filled_quantity += quantity
-        self.filled_price = total_value / self.filled_quantity
         
         # Update status
         if self.filled_quantity >= self.quantity:
