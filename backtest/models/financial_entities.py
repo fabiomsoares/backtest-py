@@ -50,6 +50,7 @@ class TradingPair:
     Represents a trading pair (e.g., BTC/USD, EUR/USD, AAPL/USD).
     
     Attributes:
+        id: Unique identifier (UUID)
         base_asset: The asset being traded
         quote_asset: The asset used for pricing
         multiplying_factor: Price multiplier (e.g., 1000 for mini contracts)
@@ -63,6 +64,7 @@ class TradingPair:
     multiplying_factor: Decimal = Decimal("1")
     contract_size: Decimal = Decimal("1")
     min_unit: Decimal = Decimal("1")
+    id: UUID = field(default_factory=uuid4)
     
     def __post_init__(self):
         """Validate trading pair and generate pair_code if not provided."""
