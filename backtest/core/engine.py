@@ -1,201 +1,293 @@
-"""
-Core backtesting engine for executing trading strategies.
-"""
+"""Main backtesting engine module."""
 
-from typing import Dict, List, Optional
+from typing import Dict, Optional, Any
+import pandas as pd
 from datetime import datetime
-from backtest.models.strategy import Strategy
-from backtest.models.market_data import MarketBar
-from backtest.models.portfolio import Portfolio
-from backtest.models.order import Order, OrderStatus, OrderSide
-from backtest.models.position import Position
-from backtest.repositories.market_data_repository import MarketDataRepository
-from backtest.repositories.order_repository import OrderRepository
-from backtest.repositories.position_repository import PositionRepository
-from backtest.repositories.portfolio_repository import PortfolioRepository
-from backtest.core.performance import PerformanceMetrics
+
+from backtest.core.portfolio import Portfolio
+from backtest.core.order import Order, OrderType, OrderSide
+from backtest.strategies.base import BaseStrategy
 
 
 class BacktestEngine:
     """
-    Main backtesting engine that executes trading strategies.
+    Main backtesting engine that executes strategies on historical data.
     
-    Coordinates data flow, order execution, and portfolio management.
+    This class orchestrates the backtesting process, including data iteration,
+    signal generation, order execution, and performance tracking.
+    
+    Attributes:
+        strategy (BaseStrategy): Trading strategy to backtest
+        initial_capital (float): Starting capital
+        commission (float): Commission per trade
+        portfolio (Portfolio): Portfolio manager
+        
+    Example:
+        >>> from backtest import BacktestEngine, BaseStrategy
+        >>> strategy = MyStrategy()
+        >>> engine = BacktestEngine(
+        ...     strategy=strategy,
+        ...     initial_capital=100000,
+        ...     commission=0.001
+        ... )
+        >>> results = engine.run(data)
+        >>> metrics = engine.get_metrics()
     """
     
-    def __init__(self, initial_capital: float = 100000.0):
+    def __init__(
+        self,
+        strategy: BaseStrategy,
+        initial_capital: float = 100000.0,
+        commission: float = 0.0,
+    ):
         """
-        Initialize the backtest engine.
+        Initialize the backtesting engine.
         
         Args:
-            initial_capital: Starting capital for the backtest
+            strategy: Trading strategy to backtest
+            initial_capital: Starting capital amount
+            commission: Commission per trade (fixed amount or percentage if < 1)
         """
+        self.strategy = strategy
         self.initial_capital = initial_capital
-        self.market_data_repo = MarketDataRepository()
-        self.order_repo = OrderRepository()
-        self.position_repo = PositionRepository()
-        self.portfolio_repo = PortfolioRepository()
-        self.current_bar: Optional[MarketBar] = None
+        self.commission = commission
+        self.portfolio = Portfolio(initial_capital=initial_capital, commission=commission)
+        self.data: Optional[pd.DataFrame] = None
+        self.results: Dict[str, Any] = {}
     
-    def run(self, strategy: Strategy, bars: List[MarketBar]) -> PerformanceMetrics:
+    def run(
+        self,
+        data: pd.DataFrame,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
-        Run a backtest with the given strategy and market data.
+        Run the backtest on historical data.
         
         Args:
-            strategy: Trading strategy to test
-            bars: List of market bars to process
+            data: Historical price data with columns ['open', 'high', 'low', 'close', 'volume']
+                  Index should be datetime
+            start_date: Optional start date for backtest (format: 'YYYY-MM-DD')
+            end_date: Optional end date for backtest (format: 'YYYY-MM-DD')
             
         Returns:
-            Performance metrics for the backtest
+            Dictionary containing backtest results and metrics
+            
+        Example:
+            >>> data = pd.DataFrame(...)  # Load historical data
+            >>> results = engine.run(data, start_date='2020-01-01', end_date='2021-12-31')
         """
-        # Initialize portfolio
-        portfolio = Portfolio(
-            initial_capital=self.initial_capital,
-            cash=self.initial_capital
-        )
-        self.portfolio_repo.save(portfolio)
+        # Validate and prepare data
+        self.data = self._prepare_data(data, start_date, end_date)
         
-        # Add bars to repository
-        self.market_data_repo.add_bars(bars)
+        # Validate data with strategy
+        self.strategy.validate_data(self.data)
         
-        # Process each bar
-        for bar in sorted(bars, key=lambda b: b.timestamp):
-            self.current_bar = bar
-            strategy.bars.append(bar)
-            
-            # Update positions with current prices
-            if self.position_repo.exists(bar.symbol):
-                position = self.position_repo.get(bar.symbol)
-                position.update_price(bar.close)
-                self.position_repo.update(position)
-            
-            # Execute strategy
-            strategy.on_bar(bar)
-            
-            # Process pending orders
-            self._process_orders(strategy)
+        # Generate signals
+        signals = self.strategy.generate_signals(self.data)
         
-        # Calculate performance metrics
-        return self._calculate_performance(portfolio)
+        # Execute backtest
+        self._execute_backtest(signals)
+        
+        # Calculate metrics
+        self.results = self.get_metrics()
+        
+        return self.results
     
-    def _process_orders(self, strategy: Strategy):
+    def _prepare_data(
+        self,
+        data: pd.DataFrame,
+        start_date: Optional[str],
+        end_date: Optional[str],
+    ) -> pd.DataFrame:
         """
-        Process pending orders from the strategy.
+        Prepare and validate input data.
         
         Args:
-            strategy: The trading strategy
-        """
-        portfolio = self.portfolio_repo.get()
-        if not portfolio or not self.current_bar:
-            return
-        
-        for order in strategy.orders:
-            if order.status != OrderStatus.PENDING:
-                continue
+            data: Raw historical data
+            start_date: Optional start date filter
+            end_date: Optional end date filter
             
-            # For market orders, fill immediately at current price
-            if order.order_type.value == "market":
-                fill_price = self.current_bar.close
-                
-                # Check if we have enough cash (for buy orders)
-                if order.side == OrderSide.BUY:
-                    required_cash = order.quantity * fill_price
-                    if portfolio.cash < required_cash:
-                        order.status = OrderStatus.REJECTED
-                        continue
-                
-                # Fill the order
-                order.fill(order.quantity, fill_price)
-                self.order_repo.add(order)
-                
-                # Update portfolio and positions
-                self._execute_order(order, portfolio, strategy)
-                
-                # Notify strategy
-                strategy.on_order_filled(order)
-    
-    def _execute_order(self, order: Order, portfolio: Portfolio, strategy: Strategy):
+        Returns:
+            Prepared and validated DataFrame
         """
-        Execute a filled order by updating positions and cash.
+        # Make a copy to avoid modifying original
+        df = data.copy()
+        
+        # Ensure datetime index
+        if not isinstance(df.index, pd.DatetimeIndex):
+            if 'date' in df.columns:
+                df.set_index('date', inplace=True)
+            df.index = pd.to_datetime(df.index)
+        
+        # Filter by date range if specified
+        if start_date:
+            df = df[df.index >= pd.to_datetime(start_date)]
+        if end_date:
+            df = df[df.index <= pd.to_datetime(end_date)]
+        
+        # Validate required columns
+        required_columns = ['close']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            raise ValueError(f"Missing required columns: {missing_columns}")
+        
+        return df
+    
+    def _execute_backtest(self, signals: pd.DataFrame) -> None:
+        """
+        Execute the backtest by processing signals and managing portfolio.
         
         Args:
-            order: The filled order
-            portfolio: Current portfolio
-            strategy: The trading strategy
+            signals: DataFrame with trading signals
         """
-        if order.side == OrderSide.BUY:
-            # Deduct cash
-            cost = order.filled_quantity * order.filled_price
-            portfolio.cash -= cost
+        # Merge data and signals
+        data_with_signals = self.data.join(signals, how='left')
+        
+        # Iterate through each time period
+        for timestamp, row in data_with_signals.iterrows():
+            # Get current prices
+            current_price = row['close']
+            prices = {'default': current_price}
             
-            # Add or update position
-            if portfolio.has_position(order.symbol):
-                position = portfolio.get_position(order.symbol)
-                # Update average entry price
-                total_quantity = position.quantity + order.filled_quantity
-                total_cost = (position.quantity * position.entry_price) + cost
-                position.quantity = total_quantity
-                position.entry_price = total_cost / total_quantity
-                position.current_price = order.filled_price
-            else:
-                position = Position(
-                    symbol=order.symbol,
-                    quantity=order.filled_quantity,
-                    entry_price=order.filled_price,
-                    entry_time=order.timestamp,
-                    current_price=order.filled_price
+            # Update portfolio prices
+            self.portfolio.update_prices(prices)
+            
+            # Process trading signals
+            # TODO: Support multiple symbols
+            signal = row.get('signal', 0)
+            symbol = 'default'
+            
+            if signal != 0:
+                self._process_signal(
+                    symbol=symbol,
+                    signal=signal,
+                    price=current_price,
+                    timestamp=timestamp,
                 )
-                portfolio.add_position(position)
-                self.position_repo.add(position)
-                strategy.positions[order.symbol] = position
-        
-        elif order.side == OrderSide.SELL:
-            # Add cash
-            proceeds = order.filled_quantity * order.filled_price
-            portfolio.cash += proceeds
             
-            # Update or remove position
-            if portfolio.has_position(order.symbol):
-                position = portfolio.get_position(order.symbol)
-                position.quantity -= order.filled_quantity
-                
-                if position.quantity <= 0:
-                    portfolio.remove_position(order.symbol)
-                    self.position_repo.delete(order.symbol)
-                    if order.symbol in strategy.positions:
-                        del strategy.positions[order.symbol]
-                else:
-                    position.current_price = order.filled_price
-                    self.position_repo.update(position)
-                    strategy.positions[order.symbol] = position
-        
-        # Record transaction
-        portfolio.record_transaction({
-            "timestamp": order.timestamp,
-            "order_id": order.order_id,
-            "symbol": order.symbol,
-            "side": order.side.value,
-            "quantity": order.filled_quantity,
-            "price": order.filled_price,
-            "value": order.filled_quantity * order.filled_price
-        })
-        
-        self.portfolio_repo.save(portfolio)
+            # Record portfolio value
+            self.portfolio.record_portfolio_value(timestamp)
     
-    def _calculate_performance(self, portfolio: Portfolio) -> PerformanceMetrics:
+    def _process_signal(
+        self,
+        symbol: str,
+        signal: float,
+        price: float,
+        timestamp: datetime,
+    ) -> None:
+        """
+        Process a trading signal and generate orders.
+        
+        Args:
+            symbol: Trading symbol
+            signal: Signal value (1 for buy, -1 for sell, 0 for hold)
+            price: Current price
+            timestamp: Current timestamp
+        """
+        current_position = self.portfolio.get_position(symbol)
+        
+        # Buy signal
+        if signal > 0:
+            # Only buy if we don't have a position or want to add
+            if current_position is None:
+                # Calculate position size (use all available cash for now)
+                # TODO: Implement position sizing strategies
+                quantity = int(self.portfolio.cash * 0.95 / price)
+                
+                if quantity > 0:
+                    order = Order(
+                        symbol=symbol,
+                        order_type=OrderType.MARKET,
+                        side=OrderSide.BUY,
+                        quantity=quantity,
+                        timestamp=timestamp,
+                    )
+                    self.portfolio.execute_order(order, fill_price=price, timestamp=timestamp)
+        
+        # Sell signal
+        elif signal < 0:
+            # Only sell if we have a position
+            if current_position is not None and current_position.quantity > 0:
+                order = Order(
+                    symbol=symbol,
+                    order_type=OrderType.MARKET,
+                    side=OrderSide.SELL,
+                    quantity=current_position.quantity,
+                    timestamp=timestamp,
+                )
+                self.portfolio.execute_order(order, fill_price=price, timestamp=timestamp)
+    
+    def get_metrics(self) -> Dict[str, Any]:
         """
         Calculate performance metrics for the backtest.
         
-        Args:
-            portfolio: Final portfolio state
-            
         Returns:
-            Performance metrics
+            Dictionary containing various performance metrics
+            
+        Example:
+            >>> metrics = engine.get_metrics()
+            >>> print(f"Total Return: {metrics['total_return']:.2f}%")
         """
-        return PerformanceMetrics(
-            initial_capital=self.initial_capital,
-            final_equity=portfolio.equity,
-            total_return=portfolio.total_pnl_percent,
-            total_trades=len(portfolio.transaction_history),
-            portfolio=portfolio
+        if self.portfolio.portfolio_history:
+            portfolio_df = self.portfolio.get_portfolio_history_df()
+            
+            # Calculate returns
+            portfolio_df['returns'] = portfolio_df['total_value'].pct_change()
+            
+            # Basic metrics
+            total_return = (
+                (self.portfolio.total_value - self.initial_capital) / self.initial_capital * 100
+            )
+            
+            # Calculate additional metrics
+            # TODO: Import and use metrics module for more sophisticated calculations
+            metrics = {
+                'initial_capital': self.initial_capital,
+                'final_value': self.portfolio.total_value,
+                'total_return': total_return,
+                'total_pnl': self.portfolio.total_pnl,
+                'cash': self.portfolio.cash,
+                'positions_value': self.portfolio.positions_value,
+                'num_trades': len(self.portfolio.transaction_history),
+                'num_positions': len(self.portfolio.positions),
+            }
+            
+            # Add more metrics if we have enough data
+            if len(portfolio_df) > 1:
+                returns = portfolio_df['returns'].dropna()
+                if len(returns) > 0:
+                    metrics['volatility'] = returns.std() * (252 ** 0.5) * 100  # Annualized
+                    metrics['sharpe_ratio'] = (
+                        returns.mean() / returns.std() * (252 ** 0.5) if returns.std() != 0 else 0
+                    )
+                    
+                    # Maximum drawdown
+                    cumulative = (1 + returns).cumprod()
+                    running_max = cumulative.expanding().max()
+                    drawdown = (cumulative - running_max) / running_max
+                    metrics['max_drawdown'] = drawdown.min() * 100
+            
+            return metrics
+        
+        return {
+            'initial_capital': self.initial_capital,
+            'final_value': self.portfolio.total_value,
+            'total_return': 0.0,
+            'total_pnl': 0.0,
+        }
+    
+    def get_portfolio_history(self) -> pd.DataFrame:
+        """Get portfolio value history as a DataFrame."""
+        return self.portfolio.get_portfolio_history_df()
+    
+    def get_transactions(self) -> pd.DataFrame:
+        """Get transaction history as a DataFrame."""
+        return self.portfolio.get_transactions_df()
+    
+    def __repr__(self) -> str:
+        """String representation of the engine."""
+        return (
+            f"BacktestEngine(strategy={self.strategy.__class__.__name__}, "
+            f"initial_capital={self.initial_capital}, commission={self.commission})"
         )

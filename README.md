@@ -1,185 +1,269 @@
 # backtest-py
 
-A simple but sophisticated backtesting framework in Python for testing trading strategies with historical market data.
+[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-## Overview
-
-backtest-py is a Python-based backtesting framework designed to help traders and quantitative analysts test their trading strategies using historical data. The framework uses an in-memory database for fast data access and manipulation during backtesting simulations.
+A simple but sophisticated backtesting framework in Python for testing trading strategies on historical data.
 
 ## Features
 
-- **In-Memory Database**: Fast data storage and retrieval for efficient backtesting
-- **Modular Architecture**: Clean separation between models, data repositories, and core functionality
-- **Strategy Testing**: Framework for implementing and testing custom trading strategies
-- **Historical Data Support**: Process and analyze historical market data
-- **Performance Metrics**: Calculate key performance indicators for trading strategies
+- 🚀 **Easy to Use**: Simple API for quick backtesting
+- 📊 **Comprehensive Metrics**: Sharpe ratio, max drawdown, volatility, and more
+- 📈 **Built-in Strategies**: Moving average, momentum, and more
+- 🎨 **Visualization**: Beautiful charts and reports
+- 🔧 **Extensible**: Easy to create custom strategies
+- 📦 **Well-Structured**: Clean, modular codebase
+- 🧪 **Tested**: Comprehensive test suite
+- 📚 **Documented**: Extensive documentation and examples
+
+## Quick Start
+
+### Installation
+
+```bash
+# Install from source
+git clone https://github.com/fabiomsoares/backtest-py.git
+cd backtest-py
+pip install -e .
+```
+
+### Basic Usage
+
+```python
+from backtest import BacktestEngine
+from backtest.strategies import MovingAverageStrategy
+from backtest.data import DataLoader
+
+# Load historical data
+loader = DataLoader()
+data = loader.load_yahoo('AAPL', start='2020-01-01', end='2023-12-31')
+
+# Create a strategy
+strategy = MovingAverageStrategy(fast_window=20, slow_window=50)
+
+# Run backtest
+engine = BacktestEngine(
+    strategy=strategy,
+    initial_capital=100000,
+    commission=0.001
+)
+
+results = engine.run(data)
+
+# Display results
+print(f"Total Return: {results['total_return']:.2f}%")
+print(f"Sharpe Ratio: {results['sharpe_ratio']:.3f}")
+print(f"Max Drawdown: {results['max_drawdown']:.2f}%")
+```
 
 ## Project Structure
 
 ```
 backtest-py/
-├── backtest/
-│   ├── models/          # Data models and entities
-│   ├── repositories/    # Data access layer (in-memory database operations)
-│   ├── core/           # Core backtesting functionality
-│   └── __init__.py
-├── tests/              # Unit and integration tests
-├── examples/           # Example strategies and usage
-├── README.md
-└── requirements.txt
+├── backtest/                 # Main package
+│   ├── core/                 # Core backtesting engine
+│   │   ├── engine.py         # Main backtest engine
+│   │   ├── portfolio.py      # Portfolio management
+│   │   ├── order.py          # Order execution
+│   │   └── position.py       # Position tracking
+│   ├── strategies/           # Trading strategies
+│   │   ├── base.py           # Base strategy class
+│   │   ├── moving_average.py # MA crossover strategy
+│   │   └── momentum.py       # Momentum strategy
+│   ├── data/                 # Data handling
+│   │   ├── loader.py         # Data loading utilities
+│   │   ├── provider.py       # Data provider interfaces
+│   │   └── preprocessor.py   # Data preprocessing
+│   ├── metrics/              # Performance metrics
+│   │   ├── returns.py        # Return calculations
+│   │   ├── risk.py           # Risk metrics
+│   │   └── performance.py    # Overall performance
+│   ├── visualization/        # Charts and reports
+│   │   ├── plots.py          # Plotting functions
+│   │   └── reports.py        # Report generation
+│   └── utils/                # Utility functions
+│       ├── helpers.py        # Helper functions
+│       └── validators.py     # Validation utilities
+├── api/                      # REST API (future)
+├── cli/                      # Command-line interface (future)
+├── tests/                    # Test suite
+├── examples/                 # Usage examples
+├── docs/                     # Documentation
+└── scripts/                  # Utility scripts
 ```
 
-### Directory Descriptions
-
-- **models/**: Contains data models representing trading entities such as:
-  - Market data (OHLCV - Open, High, Low, Close, Volume)
-  - Trading positions
-  - Orders
-  - Portfolio state
-
-- **repositories/**: Data access layer providing an abstraction over the in-memory database:
-  - Market data repository
-  - Position repository
-  - Order repository
-  - Portfolio repository
-
-- **core/**: Core backtesting engine and strategy execution:
-  - Backtesting engine
-  - Strategy base classes
-  - Event handling
-  - Performance calculation
-
-## Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/fabiomsoares/backtest-py.git
-cd backtest-py
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-## Quick Start
-
-```python
-from backtest.core.engine import BacktestEngine
-from backtest.models.strategy import Strategy
-from backtest.repositories.market_data_repository import MarketDataRepository
-
-# Initialize the backtesting engine
-engine = BacktestEngine()
-
-# Define your trading strategy
-class MyStrategy(Strategy):
-    def on_bar(self, bar):
-        # Implement your strategy logic here
-        pass
-
-# Load historical data
-bars = []  # Load your historical market data here
-market_data_repo = MarketDataRepository()
-market_data_repo.add_bars(bars)
-
-# Run the backtest
-strategy = MyStrategy()
-results = engine.run(strategy, bars)
-
-# Analyze results
-print(f"Total Return: {results.total_return:.2%}")
-print(f"ROI: {results.roi:.2f}%")
-```
-
-## Usage
+## Usage Examples
 
 ### Creating a Custom Strategy
 
-Extend the `Strategy` base class and implement your trading logic:
-
 ```python
-from backtest.models.strategy import Strategy
-from backtest.models.order import Order, OrderType
+from backtest import BaseStrategy
+import pandas as pd
 
-class MovingAverageCrossover(Strategy):
-    def __init__(self, short_window=20, long_window=50):
+class MyStrategy(BaseStrategy):
+    def __init__(self, param1=10):
         super().__init__()
-        self.short_window = short_window
-        self.long_window = long_window
+        self.param1 = param1
     
-    def on_bar(self, bar):
-        # Calculate moving averages
-        if len(self.bars) < self.long_window:
-            return
+    def generate_signals(self, data: pd.DataFrame) -> pd.DataFrame:
+        signals = pd.DataFrame(index=data.index)
+        signals['signal'] = 0
         
-        recent_bars = self.bars[-self.long_window:]
-        short_ma = sum(b.close for b in recent_bars[-self.short_window:]) / self.short_window
-        long_ma = sum(b.close for b in recent_bars) / self.long_window
+        # Your strategy logic here
+        # 1 = buy, -1 = sell, 0 = hold
         
-        # Generate signals
-        if short_ma > long_ma and not self.has_position(bar.symbol):
-            self.buy(bar.symbol, quantity=100)
-        elif short_ma < long_ma and self.has_position(bar.symbol):
-            self.sell(bar.symbol, quantity=100)
+        return signals
+
+# Use your strategy
+strategy = MyStrategy(param1=20)
+engine = BacktestEngine(strategy=strategy)
+results = engine.run(data)
 ```
 
-### Loading Market Data
-
-The framework supports loading historical market data into the in-memory database:
+### Loading Data from Different Sources
 
 ```python
-from backtest.repositories.market_data_repository import MarketDataRepository
-from backtest.models.market_data import MarketBar
-from datetime import datetime
+from backtest.data import DataLoader
 
-# Initialize repository
-repo = MarketDataRepository()
+loader = DataLoader()
 
-# Add data programmatically
-bars = [
-    MarketBar(
-        timestamp=datetime(2023, 1, 1, 9, 30, 0),
-        symbol='AAPL',
-        open=100.0,
-        high=102.0,
-        low=99.5,
-        close=101.5,
-        volume=1000000
-    )
-]
-repo.add_bars(bars)
+# From Yahoo Finance
+data = loader.load_yahoo('AAPL', start='2020-01-01', end='2023-12-31')
+
+# From CSV file
+data = loader.load_csv('data/prices.csv')
+
+# From pandas-datareader
+data = loader.load_pandas_datareader('AAPL', 'yahoo', '2020-01-01')
 ```
 
-## Architecture
+### Visualizing Results
 
-The framework follows a clean architecture pattern:
+```python
+from backtest.visualization import plot_portfolio_value, plot_returns, plot_drawdown
 
-1. **Models Layer**: Defines the data structures and entities
-2. **Repository Layer**: Handles data persistence and retrieval (in-memory)
-3. **Core Layer**: Contains business logic and backtesting engine
-4. **Strategy Layer**: User-defined trading strategies
+# Get portfolio history
+portfolio_history = engine.get_portfolio_history()
+returns = portfolio_history['total_value'].pct_change()
 
-This separation ensures:
-- Easy testing and mocking
-- Clear dependencies
-- Maintainable and extensible code
-- Fast in-memory operations
+# Create plots
+plot_portfolio_value(portfolio_history['total_value'])
+plot_returns(returns)
+plot_drawdown(returns)
+```
+
+### Using in Google Colab
+
+```python
+# Install from GitHub
+!pip install git+https://github.com/fabiomsoares/backtest-py.git
+
+# Use as normal
+from backtest import BacktestEngine
+from backtest.strategies import MovingAverageStrategy
+from backtest.data import DataLoader
+
+# ... your code ...
+```
+
+## Documentation
+
+- [Getting Started Guide](docs/getting_started.md) - Comprehensive introduction
+- [API Reference](docs/api_reference.md) - Detailed API documentation
+- [Examples](docs/examples.md) - More usage examples
+- [Example Scripts](examples/) - Working example scripts
+
+## Development
+
+### Running Tests
+
+```bash
+# Install dev dependencies
+pip install -e .[dev]
+
+# Run tests
+pytest
+
+# Run with coverage
+pytest --cov=backtest
+```
+
+### Code Quality
+
+```bash
+# Format code
+black backtest tests examples
+
+# Lint code
+flake8 backtest tests
+
+# Type checking
+mypy backtest
+```
+
+## Roadmap
+
+### Current Features (v0.1.0)
+- ✅ Core backtesting engine
+- ✅ Portfolio management
+- ✅ Built-in strategies (MA, Momentum)
+- ✅ Performance metrics
+- ✅ Visualization tools
+- ✅ Data loading utilities
+- ✅ Comprehensive test suite
+
+### Planned Features
+- [ ] Multi-asset portfolio support
+- [ ] Options and futures support
+- [ ] REST API interface (FastAPI)
+- [ ] Command-line interface (CLI)
+- [ ] Real-time data support
+- [ ] Advanced order types
+- [ ] Risk management tools
+- [ ] Strategy optimization
+- [ ] Walk-forward analysis
+- [ ] Monte Carlo simulation
+- [ ] Interactive dashboards
+- [ ] Database integration
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
+
+### Development Setup
+
+```bash
+git clone https://github.com/fabiomsoares/backtest-py.git
+cd backtest-py
+pip install -e .[dev]
+pytest
+```
 
 ## License
 
-This project is open source and available under the MIT License.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Inspired by popular backtesting frameworks like Backtrader and Zipline
+- Built with Python, pandas, NumPy, and matplotlib
+- Thanks to all contributors
 
 ## Contact
 
-Fabio Soares - fabio@fabiosoares.com
+- GitHub: [@fabiomsoares](https://github.com/fabiomsoares)
+- Project Link: [https://github.com/fabiomsoares/backtest-py](https://github.com/fabiomsoares/backtest-py)
 
-Project Link: [https://github.com/fabiomsoares/backtest-py](https://github.com/fabiomsoares/backtest-py)
+## Support
+
+If you find this project helpful, please consider giving it a ⭐️ on GitHub!
+
+---
+
+**Note**: This is an educational project for backtesting trading strategies. Past performance does not guarantee future results. Always do your own research before making investment decisions.

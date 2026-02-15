@@ -1,18 +1,44 @@
-"""
-Repositories module for backtest-py.
+"""Repository layer for data access and storage."""
 
-This module contains data access layer implementations for the in-memory database.
-All data operations are performed in-memory for fast backtesting performance.
-"""
-
+from backtest.repositories.base import InMemoryRepository
+from backtest.repositories.entity_repositories import (
+    AssetRepository,
+    BrokerRepository,
+    TraderAgentRepository,
+    AccountRepository,
+    TaxRegimeRepository,
+    TradingPairRepository,
+    TradingRulesRepository,
+)
+from backtest.repositories.order_repositories import (
+    OrderRepository,
+    OrderHistoryRepository,
+)
 from backtest.repositories.market_data_repository import MarketDataRepository
-from backtest.repositories.order_repository import OrderRepository
-from backtest.repositories.position_repository import PositionRepository
-from backtest.repositories.portfolio_repository import PortfolioRepository
+from backtest.repositories.context import (
+    BacktestContext,
+    get_global_context,
+    reset_global_context,
+)
 
 __all__ = [
-    "MarketDataRepository",
+    # Base
+    "InMemoryRepository",
+    # Entity repositories
+    "AssetRepository",
+    "BrokerRepository",
+    "TraderAgentRepository",
+    "AccountRepository",
+    "TaxRegimeRepository",
+    "TradingPairRepository",
+    "TradingRulesRepository",
+    # Order repositories
     "OrderRepository",
-    "PositionRepository",
-    "PortfolioRepository",
+    "OrderHistoryRepository",
+    # Market data
+    "MarketDataRepository",
+    # Context
+    "BacktestContext",
+    "get_global_context",
+    "reset_global_context",
 ]
