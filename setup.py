@@ -17,10 +17,10 @@ with open("requirements.txt") as f:
 
 setup(
     name="backtest-py",
-    version="0.1.0",
+    version="0.2.0",
     author="Fabio Soares",
     author_email="",
-    description="A simple but sophisticated backtesting framework in Python",
+    description="A production-grade backtesting framework with event-driven strategies",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/fabiomsoares/backtest-py",
