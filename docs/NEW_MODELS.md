@@ -1,6 +1,8 @@
-# New Production-Grade Models (In Progress)
+# Production-Grade Models
 
-This document explains the new production-grade backtesting framework being added to backtest-py. This is a work-in-progress refactoring that adds realistic broker modeling, advanced order types, and comprehensive fee tracking.
+This document explains the production-grade backtesting framework in backtest-py v0.2.0+. This framework provides realistic broker modeling, advanced order types, comprehensive fee tracking, and event-driven strategy execution.
+
+> **Note**: As of v0.2.0, the old core classes (Order, Portfolio, Position) have been fully replaced by these production models. The framework now uses an event-driven architecture with the `on_bar()` pattern.
 
 ## What's New
 
