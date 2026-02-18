@@ -37,6 +37,10 @@ from backtest.models.backtest_run import (
     AccountBalance,
     AccountTransaction,
 )
+from backtest.models.spot_order import SpotOrder
+from backtest.models.transaction import Transaction, TransactionType
+from backtest.models.balance import Balance
+from backtest.models.decision_action import DecisionAction, ActionType
 
 __all__ = [
     # Financial entities
@@ -63,8 +67,16 @@ __all__ = [
     "TradingOrderHistory",
     "OrderDirection",
     "OrderStatus",
+    "SpotOrder",
     # Backtest run
     "BacktestRun",
     "AccountBalance",
     "AccountTransaction",
+    # Transactions and balances
+    "Transaction",
+    "TransactionType",
+    "Balance",
+    # Decision actions
+    "DecisionAction",
+    "ActionType",
 ]

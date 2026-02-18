@@ -15,6 +15,9 @@ from backtest.repositories.order_repositories import (
     OrderHistoryRepository,
 )
 from backtest.repositories.market_data_repository import MarketDataRepository
+from backtest.repositories.transaction_repository import TransactionRepository
+from backtest.repositories.spot_order_repository import SpotOrderRepository
+from backtest.repositories.balance_repository import BalanceRepository
 from backtest.repositories.context import (
     BacktestContext,
     get_global_context,
@@ -35,6 +38,10 @@ __all__ = [
     # Order repositories
     "OrderRepository",
     "OrderHistoryRepository",
+    "SpotOrderRepository",
+    # Transaction and balance repositories
+    "TransactionRepository",
+    "BalanceRepository",
     # Market data
     "MarketDataRepository",
     # Context
